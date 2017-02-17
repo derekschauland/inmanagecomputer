@@ -137,7 +137,7 @@
 				$GPOQuery = Get-WmiObject @WMIHast `
 				-Namespace "ROOT\RSOP\Computer" `
 				-Class 'RSOP_GPLink' `
-				-Filter "AppliedOrder <> 0" |
+				| Where-Object {$_.appliedorder -ne 0} |
 				Select @{ n = 'linkOrder'; e = { $_.linkOrder } },
 					   @{ n = 'appliedOrder'; e = { $_.appliedOrder } },
 					   @{ n = 'GPO'; e = { $_.GPO.ToString().Replace("RSOP_GPO.", "") } },
@@ -303,15 +303,27 @@ function rename-incomputer
 		[switch]$reboot
 	)
 	
-	$gpoWinrm = (Get-RemoteAppliedGPOs -ComputerName $computername |select Name).name
+	$gpos = Get-RemoteAppliedGPOs
 	
-	if($gpoWinRM -match "WinRM")
+	$gpoWinrm = $gpos.appliedgpos
+		
+	if(($gpoWinRM | select name) -match "WinRM")
 	{
-		Write-Host "A WinRM GPO was found - $gpoWinrm - this host may be configured to allow remoting."
+		Write-Host "A WinRM GPO was found - $($gpoWinrm.name) - this host may be configured to allow remoting."
 	}
 	else
 	{
-		Write-Host "Cannot rename and reboot computers remotely with PowerShell - WinRM is not configured to allow remoting."	
+		Write-Host "Cannot rename and reboot computers remotely with PowerShell - WinRM is not configured to allow remoting. Script Exiting."
+		$ie = New-Object -com internetexplorer.application
+		$ie.navigate2("http://www.grouppolicy.biz/2014/05/enable-winrm-via-group-policy/")
+		$ie.visible = $true
+		$quit = "1"
+		
+	}
+	
+	if ($quit -eq "1")
+	{
+		exit;
 	}
 	
 	if (!$reboot)
