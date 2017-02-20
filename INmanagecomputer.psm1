@@ -288,6 +288,7 @@
 	}
 }
 
+
 function rename-incomputer
 {
 	<# .externalhelp Inmanagecomputer.psm1-Help.xml #>
@@ -299,88 +300,160 @@ function rename-incomputer
 		[Parameter(Mandatory = $true, ValueFromPipeline = $true, ValueFromPipelineByPropertyName = $true)]
 		[string[]]$newname,
 		[string]$prefix,
-		[System.Management.Automation.PSCredential]$credential = (Get-Credential),
 		[switch]$reboot
 	)
 	
-	$gpos = Get-RemoteAppliedGPOs
+	$gpos = Get-RemoteAppliedGPOs -ComputerName $computername 
 	
 	$gpoWinrm = $gpos.appliedgpos
-		
-	if(($gpoWinRM | select name) -match "WinRM")
+	
+#	function time-now
+#	{
+#		$(Get-Date -Format "yyyy-MM-dd-hh-mm-ss")
+#	}
+	
+	
+#	if (!(Test-Path -Path $logpath))
+#	{
+#		$null = New-Item -Path $logpath -ItemType Directory
+#	}
+	
+	
+#	$logpath = "c:\Users\$env:USERNAME\logs\"
+#	$logname = "rename-incomputer-$(time-now).log"
+#	$fulllogpath = $logpath + $logname
+	
+	#	Start-Log -LogPath $logpath -logname $logname -ScriptVersion 1.0.0
+	
+	if ((Test-Path $computername) -eq $true)
 	{
-		Write-Host "A WinRM GPO was found - $($gpoWinrm.name) - this host may be configured to allow remoting."
+		$computername = Import-Csv $computername
 	}
 	else
 	{
-		Write-Host "Cannot rename and reboot computers remotely with PowerShell - WinRM is not configured to allow remoting. Script Exiting."
-		$ie = New-Object -com internetexplorer.application
-		$ie.navigate2("http://www.grouppolicy.biz/2014/05/enable-winrm-via-group-policy/")
-		$ie.visible = $true
-		$quit = "1"
-		
+		$computername = $computername
 	}
 	
-	if ($quit -eq "1")
+	foreach ($computer in $computername)
 	{
-		exit;
-	}
-	
-	if (!$reboot)
-	{
-		Write-Host "Note: Computers renamed will need to be manually rebooted!"
-		
-		foreach ($computer in $computername)
+		if (!(Test-Connection $computer -ErrorAction SilentlyContinue))
 		{
-			$newcomputername = $prefix + "-" + $newname
+			Write-Host "$computer not available at this time"
+		}
+		else
+		{
+			$RM = (($gpoWinrm | select name) -match "WinRM")
+			$WMI = (($gpoWinrm | select name) -match "WMI Firewall")
 			
-			if ((Get-CimInstance win32_computersystem -ComputerName $computer).partofdomain -eq $true)
+			if (($RM) -and ($wmi))
 			{
-				Write-Host "Computer $computer is part of a Domain - will use provided credentials as Domain Credentials"
-				
-				Rename-Computer -ComputerName $computer -NewName $newcomputername -DomainCredential $credential
-				Write-Host "Computer $computer has been renamed to $newcomputername - you will need to restart to see the changes."
+				Write-Host "WinRM GPOs were found - $($gpoWinrm.name) - to allow management through WinRM and WMI."
+				$quit = "0"
 			}
 			else
 			{
-				Write-Host "Computer $computer is not part of a domain - will use provided credentials as Local"
-				Rename-Computer -ComputerName $computer -NewName $newcomputername -LocalCredential $credential
-				Write-Host "Computer $computer has been renamed to $newcomputername - you will need to restart to see the changes."
+				Write-Host "Cannot rename and reboot computers remotely with PowerShell - WinRM is not configured completely:`n Need to Firewall. See Weblink. Script Exiting."
+				$ie = New-Object -com internetexplorer.application
+				$ie.navigate2("http://www.grouppolicy.biz/2014/05/enable-winrm-via-group-policy/")
+				$ie.visible = $true
+				$quit = "1"
 			}
-		}
-	}
-	else
-	{
-		Write-Host "Note: Computers renamed will be rebooted right away!"
-		
-		foreach ($computer in $computername)
-		{
-			$newcomputername = $prefix + "-" + $newname
 			
-			if ((Get-CimInstance win32_computersystem -ComputerName $computer).partofdomain -eq $true)
+			
+			#	if ($os -match 10)
+			#	{
+			#		Write-LogInfo -LogPath $fulllogpath -Message "[$(time-now)] WinRM GPOs are applied to $env:COMPUTERNAME - Proceeding."
+			#	}
+			#	
+			
+			if ($quit -eq "1")
 			{
-				Write-Host "Computer $computer is part of a Domain - will use provided credentials as Domain Credentials"
+				break;
+			}
+			
+			if ($credential -eq $null)
+			{
+				$credential = Get-Credential -Message "Credentials not provided yet - please provide Domain or Local Credentials as required."
+				#Write-LogInfo -LogPath $fulllogpath -Message "[$(time-now)] Credentials provided to allow rename and reboot."
+			}
+			
+			if (!$reboot)
+			{
+				Write-Host "Note: Computers renamed will need to be manually rebooted!"
 				
-				Rename-Computer -ComputerName $computer -NewName $newcomputername -DomainCredential $credential
-				Write-Host "Computer $computer has been renamed to $newcomputername - and will reboot in 10 seconds."
-				Start-Sleep 10
-				Restart-Computer -ComputerName $computer
-				
+				foreach ($computer in $computername)
+				{
+					$newcomputername = $prefix + "-" + $newname
+					
+					if ((Get-CimInstance win32_computersystem -ComputerName $computer -Filter "Caption Like '%'").partofdomain -eq $true)
+					{
+						Write-Host "Computer $computer is part of a Domain - will use provided credentials as Domain Credentials"
+						#Write-LogInfo -LogPath $fulllogpath -Message "[$(time-now)] Computer is joined to a Domain - Domain Credentials should have been provided"
+						
+						Rename-Computer -ComputerName $computer -NewName $newcomputername -DomainCredential $credential
+						Write-Host "Computer $computer has been renamed to $newcomputername - you will need to restart to see the changes."
+						#Write-LogInfo -LogPath $fulllogpath -Message "[$(time-now)] Computer has been renamed - no restart specified. A manual restart will be required."
+					}
+					else
+					{
+						Write-Host "Computer $computer is not part of a domain - will use provided credentials as Local"
+						#Write-LogInfo -LogPath $fulllogpath -message "Computer $computer is not part of a Domain - will use provided credentials as Local Credentials"
+						Rename-Computer -ComputerName $computer -NewName $newcomputername -LocalCredential $credential
+						
+						Write-Host "Computer $computer has been renamed to $newcomputername - you will need to restart to see the changes."
+						
+						#Write-LogInfo -LogPath $fulllogpath -Message "[$(time-now)] Computer has been renamed - no restart specified. A manual restart will be required."
+					}
+				}
 			}
 			else
 			{
-				Write-Host "Computer $computer is not part of a domain - will use provided credentials as Local"
-				Rename-Computer -ComputerName $computer -NewName $newcomputername -LocalCredential $credential
-				Write-Host "Computer $computer has been renamed to $newcomputername - and will reboot in 10 seconds."
-				Start-Sleep 10
-				Restart-Computer -ComputerName $computer
+				Write-Host "Note: Computers renamed will be rebooted right away!"
+				
+				foreach ($computer in $computername)
+				{
+					$newcomputername = $prefix + "-" + $newname
+					
+					if ((Get-CimInstance win32_computersystem -ComputerName $computer -Filter "Caption Like '%'").partofdomain -eq $true)
+					{
+						Write-Host "Computer $computer is part of a Domain - will use provided credentials as Domain Credentials"
+						#Write-LogInfo -LogPath $fulllogpath -message "Computer $computer is part of a Domain - Domain Credentials should have been provided"
+						
+						Rename-Computer -ComputerName $computer -NewName $newcomputername -DomainCredential $credential
+						#Write-LogInfo -LogPath $fulllogpath -message "Computer $computer has been renamed and will reboot in 10 seconds"
+						
+						Write-Host "Computer $computer has been renamed to $newcomputername - and will reboot in 10 seconds."
+						Start-Sleep 10
+						Restart-Computer -ComputerName $computer -Force
+						
+					}
+					else
+					{
+						Write-Host "Computer $computer is not part of a domain - will use provided credentials as Local"
+						#Write-LogInfo -LogPath $fulllogpath -message "Computer $computer is not part of a Domain - Local Credentials should have been provided."
+						
+						Rename-Computer -ComputerName $computer -NewName $newcomputername -LocalCredential $credential
+						#Write-LogInfo -LogPath $fulllogpath -message "Computer $computer will be restarted after a 10 second delay."
+						
+						Write-Host "Computer $computer has been renamed to $newcomputername - and will reboot in 10 seconds."
+						Start-Sleep 10
+						Restart-Computer -ComputerName $computer -force
+					}
+				}
 			}
+			
 		}
+		
 	}
+	
 	
 }
 
-Export-ModuleMember -Function rename-incomputer 
+Export-ModuleMember -Function rename-incomputer
+Export-ModuleMember -Function Get-RemoteAppliedGPOs
+
+#use a -filter with ciminstance on Powershell 2.0 environments to avoid DMTF issues
+#itknowledgeexchange.techtarget.com/powershell/cim-session-oddity
 
 
 
