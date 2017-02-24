@@ -299,49 +299,34 @@ function rename-incomputer
 		[Parameter(Mandatory=$true,ValueFromPipeline=$true, ValueFromPipelineByPropertyName=$true)][string[]]$computername,
 		[Parameter(Mandatory = $true, ValueFromPipeline = $true, ValueFromPipelineByPropertyName = $true)]
 		[string[]]$newname,
-		[string]$prefix,
+		[Parameter(Mandatory = $true, ValueFromPipeline = $true, ValueFromPipelineByPropertyName = $true)][string]$prefix,
 		[switch]$reboot
 	)
 	
-	$gpos = Get-RemoteAppliedGPOs -ComputerName $computername 
-	
-	$gpoWinrm = $gpos.appliedgpos
-	
-#	function time-now
-#	{
-#		$(Get-Date -Format "yyyy-MM-dd-hh-mm-ss")
-#	}
-	
-	
-#	if (!(Test-Path -Path $logpath))
-#	{
-#		$null = New-Item -Path $logpath -ItemType Directory
-#	}
-	
-	
-#	$logpath = "c:\Users\$env:USERNAME\logs\"
-#	$logname = "rename-incomputer-$(time-now).log"
-#	$fulllogpath = $logpath + $logname
-	
-	#	Start-Log -LogPath $logpath -logname $logname -ScriptVersion 1.0.0
-	
+
 	if ((Test-Path $computername) -eq $true)
 	{
-		$computername = Import-Csv $computername
+		Write-Host "Using CSV FIle...`n"
+		$computername = Import-Csv $computername -Delimiter "," | select -ExpandProperty computername
 	}
 	else
 	{
+		Write-Host "Using supplied parameters..."
 		$computername = $computername
 	}
 	
+	
 	foreach ($computer in $computername)
 	{
-		if (!(Test-Connection $computer -ErrorAction SilentlyContinue))
+		if (!(Test-Connection $($computer) -ErrorAction SilentlyContinue))
 		{
-			Write-Host "$computer not available at this time"
+			Write-Host "$($computer) not available at this time"
 		}
 		else
 		{
+			$gpos = Get-RemoteAppliedGPOs -ComputerName $computer
+			$gpoWinrm = $gpos.appliedgpos
+			
 			$RM = (($gpoWinrm | select name) -match "WinRM")
 			$WMI = (($gpoWinrm | select name) -match "WMI Firewall")
 			
