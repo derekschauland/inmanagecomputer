@@ -1,4 +1,5 @@
-﻿Function Get-RemoteAppliedGPOs
+﻿
+Function Get-RemoteAppliedGPOs
 {
     <# 
     .SYNOPSIS 
@@ -306,12 +307,12 @@ function rename-incomputer
 
 	if ((Test-Path $computername) -eq $true)
 	{
-		Write-Host "Using CSV FIle...`n"
+		Write-verbose "Using CSV FIle...`n"
 		$computername = Import-Csv $computername -Delimiter "," | select -ExpandProperty computername
 	}
 	else
 	{
-		Write-Host "Using supplied parameters..."
+		Write-verbose "Using supplied parameters..."
 		$computername = $computername
 	}
 	
